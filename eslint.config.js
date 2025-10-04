@@ -79,5 +79,12 @@ export default defineConfigWithVueTs(
     },
   },
 
+  {
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      'no-explicit-any': 'off',
+    },
+  },
+
   prettierSkipFormatting,
 );
