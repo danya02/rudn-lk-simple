@@ -1,6 +1,6 @@
 <template>
-  <q-page class="column items-center justify-center q-gutter-lg">
-    <form class="column items-center justify-center q-gutter-lg" style="width: 100%">
+  <q-page class="window-width row justify-center items-center">
+    <form class="column items-center q-gutter-lg" style="width: 100%">
       <q-input class="halfwidth" standout v-model="username" label="Email or phone" :loading="isLoading"
         :disable="isLoading" />
       <q-input class="halfwidth" standout v-model="password" label="Password" type="password" :loading="isLoading"
@@ -77,6 +77,7 @@ async function login(event: Event) {
 
     if (data.data.accounts.length === 1) {
       localStorage.setItem(IdRudnRu.SelectedAdPersonId, data.data.accounts[0]!.ad_person_id);
+      await router.replace({ 'name': 'acquire-lk-code' });
     } else {
       localStorage.setItem(IdRudnRu.AdPersonOptions, JSON.stringify(data.data.accounts));
       // navigate to PickAccount page
@@ -90,6 +91,6 @@ async function login(event: Event) {
 
 <style lang="scss" scoped>
 .halfwidth {
-  width: 50%;
+  width: 75%;
 }
 </style>

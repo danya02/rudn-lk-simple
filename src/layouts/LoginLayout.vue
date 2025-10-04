@@ -10,8 +10,9 @@
       <router-view />
     </q-page-container>
     <q-page-sticky position="bottom-right" :offset="[18, 18]" v-show="isRevealed">
-      <q-fab icon="build" direction="up" color="accent">
-        <q-fab-action color="primary" icon="mdi-bomb" @click="openReset" external-label label="Reset everything" />
+      <q-fab icon="build" direction="up" color="accent" label-position="left">
+        <q-fab-action color="primary" icon="mdi-bomb" @click="openReset" external-label label="Reset everything"
+          label-position="left" />
       </q-fab>
     </q-page-sticky>
 
