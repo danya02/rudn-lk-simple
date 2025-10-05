@@ -3,7 +3,7 @@
     <div v-if="rooms.length > 0" class="column items-center q-gutter-sm">
       <p>You have {{ rooms.length }} saved rooms.</p>
       <p>Swipe right for check-in. Swipe left to delete. Tap to open schedule.</p>
-      <q-btn color="primary" label="Scan more..." to="/lk/checkin-scanner" />
+      <q-btn color="primary" label="Scan more..." to="/util/qr-camera-grant" />
 
       <NeedsToken type="QToolbar" width="100%" v-slot="{ token }">
         <q-list bordered separator>
@@ -33,7 +33,7 @@
         You don't have any saved rooms yet.
         Add one or more to begin:
       </p>
-      <q-btn class="fullwidth" color="primary" label="Scan a room QR code..." to="/lk/checkin-scanner" />
+      <q-btn class="fullwidth" color="primary" label="Scan a room QR code..." to="/util/qr-camera-grant" />
 
     </div>
   </q-page>

@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@quasar/extras": "^1.16.4",
+    "cordova.plugins.diagnostic": "^7.2.5",
     "fast-equals": "^5.3.2",
     "pinia": "^3.0.1",
     "qrcode.vue": "^3.6.0",

@@ -26,13 +26,16 @@
     </div>
   </div>
 
-  <QrcodeStream @error="onError" :track="paintOutline" @camera-on="cameraRunning = true" />
+  <QrcodeStream @error="onError" :track="paintOutline" @camera-on="onCameraRunning()" :constraints="constraint()" />
+  <q-select v-model="selectedCamera" :options="cameras" label="Select camera"
+    @update:model-value="v => onCameraSelected(v)" />
+  <q-btn color="primary" label="Rescan available cameras" @click="scanCameras()" />
 </template>
 
 <script setup lang="ts">
 import { Notify } from 'quasar';
 import type { LocalStorageRoomData } from 'src/api/types';
-import { LkRudnRu } from 'src/consts/store-consts';
+import { Device, LkRudnRu } from 'src/consts/store-consts';
 import { ref } from 'vue';
 import type { DetectedBarcode } from 'vue-qrcode-reader';
 import { QrcodeStream } from 'vue-qrcode-reader';
@@ -40,6 +43,66 @@ import { useRouter } from 'vue-router';
 
 const cameraRunning = ref(false);
 const cameraError = ref("");
+
+interface WrappedMediaDeviceInfo {
+  label: string;
+  info: MediaDeviceInfo;
+}
+
+const cameras = ref<WrappedMediaDeviceInfo[]>([]);
+const selectedCamera = ref<WrappedMediaDeviceInfo | null>(null);
+
+function constraint(): MediaTrackConstraints {
+  if (selectedCamera.value === null || cameras.value.length === 0) {
+    return {};
+  }
+
+  return {
+    deviceId: selectedCamera.value.info.deviceId
+  }
+}
+
+function onCameraSelected(which: WrappedMediaDeviceInfo) {
+  localStorage.setItem(Device.PreferredCameraId, which.info.deviceId);
+  localStorage.setItem(Device.PreferredCameraName, which.info.label);
+}
+
+async function scanCameras() {
+  cameras.value = [];
+
+  const preferredId = localStorage.getItem(Device.PreferredCameraId);
+  const preferredName = localStorage.getItem(Device.PreferredCameraName);
+
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  for (let i = 0; i < devices.length; i++) {
+    const device = devices[i];
+    if (device === undefined) {
+      continue;
+    }
+    if (device.kind === 'videoinput') {
+      const item = {
+        label: device.label,
+        info: device
+      };
+      cameras.value.push(item);
+
+      if (device.deviceId === preferredId) {
+        selectedCamera.value = item;
+      }
+
+      if (selectedCamera.value === null && device.label == preferredName) {
+        selectedCamera.value = item;
+      }
+    }
+  };
+}
+
+async function onCameraRunning() {
+  cameraRunning.value = true;
+  if (cameras.value.length === 0) {
+    await scanCameras();
+  }
+}
 
 const confirmQuit = ref(false);
 

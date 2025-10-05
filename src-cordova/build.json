@@ -1,0 +1,18 @@
+{
+  "android": {
+    "debug": {
+      "keystore": "../private/rudn-simple.keystore",
+      "storePassword": "rudn-simple",
+      "alias": "rudn-simple",
+      "password": "rudn-simple",
+      "keystoreType": "jks"
+    },
+    "release": {
+      "keystore": "../private/rudn-simple.keystore",
+      "storePassword": "rudn-simple",
+      "alias": "rudn-simple",
+      "password": "rudn-simple",
+      "keystoreType": "jks"
+    }
+  }
+}

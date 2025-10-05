@@ -55,6 +55,17 @@ const routes: RouteRecordRaw[] = [
       },
     ],
   },
+  {
+    path: '/util',
+    component: () => import('layouts/UtilLayout.vue'),
+    children: [
+      {
+        name: 'qr-camera-grant',
+        path: 'qr-camera-grant',
+        component: () => import('pages/Utility/QrScannerCameraGrant.vue'),
+      },
+    ],
+  },
 
   // Always leave this as last one,
   // but you can also remove it

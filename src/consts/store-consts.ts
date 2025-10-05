@@ -12,6 +12,11 @@ export enum LkRudnRu {
   CheckInRooms = 'lk.rudn.ru/check-in-rooms',
 }
 
+export enum Device {
+  PreferredCameraId = 'device.local/preferred-camera/id',
+  PreferredCameraName = 'device.local/preferred-camera/name',
+}
+
 export function reset_all_auth() {
   localStorage.removeItem(IdRudnRu.AccessToken);
   localStorage.removeItem(IdRudnRu.AccessTokenExpires);
