@@ -28,12 +28,13 @@ async function oauth_step1() {
 
   try {
 
-    const resp = await fetch('https://id-api.rudn.ru/api/v1/auth/continue/code?client_id=b0db4756-9468-4a9e-b399-17b546b6ea88&redirect_uri=https://mobapp-api.rudn.ru/token-rudn-id&response_type=code', {
+    const resp = await fetch('https://id-api.rudn.ru/api/v1/oauth2/continue?client_id=b0db4756-9468-4a9e-b399-17b546b6ea88&redirect_uri=https%3A%2F%2Fmobapp-api.rudn.ru%2Ftoken-rudn-id&response_type=code', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + token,
       },
+      body: '{}'
     });
 
     if (resp.ok) {

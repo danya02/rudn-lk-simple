@@ -62,10 +62,6 @@ async function login(event: Event) {
     error.value = data.error.type + ": " + data.error.description;
   }
   else if (data.data != null) {
-    if (data.data.need_auth) {
-      alert("The response contained the need_auth flag. The app might not work properly from this point.");
-    }
-
     if (data.data.accounts.length === 0) {
       alert('The login response contained no accounts. This means you do not have any identities in id.rudn.ru. The app might not work properly from this point.');
     }
@@ -73,7 +69,6 @@ async function login(event: Event) {
     localStorage.setItem(IdRudnRu.Username, username.value);
     localStorage.setItem(IdRudnRu.Password, password.value);
     localStorage.setItem(IdRudnRu.AccessToken, data.data.access_token);
-    localStorage.setItem(IdRudnRu.AccessTokenExpires, data.data.expires_in);
 
     if (data.data.accounts.length === 1) {
       localStorage.setItem(IdRudnRu.SelectedAdPersonId, data.data.accounts[0]!.ad_person_id);

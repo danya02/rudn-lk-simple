@@ -22,7 +22,7 @@
 </template>
 
 <script setup lang="ts">
-import type { GenericResponse, LoginAccount } from 'src/api/types';
+import type { ContinueResponse, GenericResponse, LoginAccount, LoginData } from 'src/api/types';
 import { IdRudnRu } from 'src/consts/store-consts';
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -34,34 +34,66 @@ const router = useRouter();
 
 
 const options: LoginAccount[] = JSON.parse(localStorage.getItem(IdRudnRu.AdPersonOptions) || '[]');
+const username = ref(localStorage.getItem(IdRudnRu.Username) || '');
+const password = ref(localStorage.getItem(IdRudnRu.Password) || '');
+
 
 async function onclick(option: LoginAccount) {
   loading.value = true;
   current_option_id.value = option.ad_person_id;
 
-  // become the new account
+  // login again as the new account
   try {
-    const resp = await fetch('https://id-api.rudn.ru/api/v1/auth/continue/replace', {
+    const resp = await fetch('https://id-api.rudn.ru/api/v1/auth/sign-in', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + localStorage.getItem(IdRudnRu.AccessToken),
       },
       body: JSON.stringify({
-        id: option.ad_person_id,
+        ad_person_id: option.ad_person_id,
+        username: username.value,
+        password: password.value
       })
     });
 
+    const data: GenericResponse = await resp.json();
+
     if (resp.ok) {
       localStorage.setItem(IdRudnRu.SelectedAdPersonId, option.ad_person_id);
-      await router.replace({ 'name': 'acquire-lk-code' });
+
+      const loginData = (data.data as LoginData);
+
+      // After getting the initial token, we need to trade it for the real token:
+      const resp2 = await fetch('https://id-api.rudn.ru/api/v1/auth/continue/direct', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + loginData.access_token,
+        }
+      });
+
+      const data2: unknown = await resp2.json();
+      if (resp2.ok) {
+        const continueResp = (data2 as ContinueResponse);
+        if (continueResp.token_type !== "Bearer") {
+          alert("In continue/direct call, token_type is not 'Bearer', but: " + JSON.stringify(continueResp) + ' App may not work properly from this point.');
+        }
+
+        localStorage.setItem(IdRudnRu.AccessToken, continueResp.access_token);
+        await router.replace({ 'name': 'acquire-lk-code' });
+      }
+      else {
+        alert("Error in continue/direct call: " + JSON.stringify(data2));
+      }
+
+
     } else {
-      const data: GenericResponse = await resp.json();
-      alert("Error replacing account identity: " + JSON.stringify(data.error));
+      alert("Error logging in as new identity: " + JSON.stringify(data.error));
     }
 
   } catch (ex) {
-    alert("Error sending account replace request. Network errors? " + (ex as any));
+    alert("Error logging in with identity. Network errors? " + (ex as any));
   } finally {
     loading.value = false;
     current_option_id.value = "";

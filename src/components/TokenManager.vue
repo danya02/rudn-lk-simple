@@ -16,7 +16,7 @@
 
 <script setup lang="ts">
 import { Notify } from 'quasar';
-import type { GenericResponse, LkRudnAuthResponse, LoginResponse } from 'src/api/types';
+import type { ContinueResponse, GenericResponse, LkRudnAuthResponse, LoginResponse } from 'src/api/types';
 import { IdRudnRu, LkRudnRu, reset_all_auth } from 'src/consts/store-consts';
 import { useTokenStore } from 'src/stores/lk_rudn';
 import { onMounted, ref, watch } from 'vue';
@@ -62,7 +62,7 @@ async function refresh() {
   token_store.is_ready = false;
   const steps = [
     login_password,
-    become_proper_user_id,
+    trade_ephemeral_token_for_real,
     trade_id_for_lk_token,
     final_check,
   ];
@@ -167,28 +167,14 @@ async function final_check(): Promise<Outcome> {
 
 async function trade_id_for_lk_token(): Promise<Outcome> {
   const id_token = localStorage.getItem(IdRudnRu.AccessToken);
-  const id_token_expires = localStorage.getItem(IdRudnRu.AccessTokenExpires);
   if (id_token === null) {
-    return Outcome.FailRollup;
-  }
-  if (id_token_expires === null) {
-    return Outcome.FailRollup;
-  }
-
-  // parse id_token_expires as date like:
-  // 2025-09-20 20:35:19
-  const id_token_expires_date = new Date(id_token_expires + ' UTC');
-  if (id_token_expires_date < new Date()) {
-    // The id.rudn.ru token has expired, needs to re-login with password
-    localStorage.removeItem(IdRudnRu.AccessToken);
-    localStorage.removeItem(IdRudnRu.AccessTokenExpires);
     return Outcome.FailRollup;
   }
 
   // Use token to acquire OAuth link
 
   try {
-    const resp = await fetch('https://id-api.rudn.ru/api/v1/auth/continue/code?client_id=b0db4756-9468-4a9e-b399-17b546b6ea88&redirect_uri=https://mobapp-api.rudn.ru/token-rudn-id&response_type=code', {
+    const resp = await fetch('https://id-api.rudn.ru/api/v1/oauth2/continue?client_id=b0db4756-9468-4a9e-b399-17b546b6ea88&redirect_uri=https%3A%2F%2Fmobapp-api.rudn.ru%2Ftoken-rudn-id&response_type=code', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -234,30 +220,44 @@ async function trade_id_for_lk_token(): Promise<Outcome> {
   }
 }
 
-async function become_proper_user_id(): Promise<Outcome> {
-  const ad_person_id = Number(localStorage.getItem(IdRudnRu.SelectedAdPersonId));
-  const resp = await fetch('https://id-api.rudn.ru/api/v1/auth/continue/replace', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + localStorage.getItem(IdRudnRu.AccessToken),
-    },
-    body: JSON.stringify({
-      id: ad_person_id,
-    })
-  });
-
-  if (!resp.ok) {
+async function trade_ephemeral_token_for_real(): Promise<Outcome> {
+  const token = localStorage.getItem(IdRudnRu.AccessToken);
+  if (token === null) {
     return Outcome.FailRollup;
   }
 
-  return Outcome.Ok;
+  try {
+    const resp = await fetch('https://id-api.rudn.ru/api/v1/auth/continue/direct', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+      }
+    });
+
+    if (!resp.ok) {
+      return Outcome.FailRollup;
+    }
+
+    const answer: ContinueResponse = await resp.json();
+    localStorage.setItem(IdRudnRu.AccessToken, answer.access_token);
+    return Outcome.Ok;
+
+  } catch (ex) {
+    Notify.create({
+      message: 'Network error in trade_ephemeral_token_for_real step: ' + (ex as any),
+      color: 'negative',
+      position: 'top',
+      progress: true,
+    });
+    return Outcome.FailRollup;
+  }
+
 }
 
 
 async function login_password(): Promise<Outcome> {
   localStorage.removeItem(IdRudnRu.AccessToken);
-  localStorage.removeItem(IdRudnRu.AccessTokenExpires);
 
   const username = localStorage.getItem(IdRudnRu.Username);
   const password = localStorage.getItem(IdRudnRu.Password);
@@ -282,14 +282,13 @@ async function login_password(): Promise<Outcome> {
       body: JSON.stringify({
         username: username,
         password: password,
-        ad_person_id: null,
+        ad_person_id: ad_person_id,
       })
     });
 
     if (resp.ok) {
       const data: LoginResponse = await resp.json();
       localStorage.setItem(IdRudnRu.AccessToken, data.data.access_token);
-      localStorage.setItem(IdRudnRu.AccessTokenExpires, data.data.expires_in);
       return Outcome.Ok;
     }
     else {

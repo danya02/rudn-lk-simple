@@ -27,6 +27,13 @@ export interface LoginAccount {
   ad_person_id: string;
 }
 
+export interface ContinueResponse {
+  token_type: string;
+  expires_in: number;
+  access_token: string;
+  refresh_token: string;
+}
+
 export interface LkRudnAuthResponse {
   data: {
     token: string;
