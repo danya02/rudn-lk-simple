@@ -9,6 +9,7 @@ export enum LkRudnRu {
   SuccessfulAccess = 'lk.rudn.ru/successful-access',
   AccessToken = 'lk.rudn.ru/access-token',
   CheckInRooms = 'lk.rudn.ru/check-in-rooms',
+  PacsCode = 'lk.rudn.ru/pacs-code',
 }
 
 export enum Device {
@@ -25,4 +26,5 @@ export function reset_all_auth() {
 
   localStorage.removeItem(LkRudnRu.SuccessfulAccess);
   localStorage.removeItem(LkRudnRu.AccessToken);
+  localStorage.removeItem(LkRudnRu.PacsCode);
 }

@@ -2,8 +2,9 @@
   <q-page class="column items-center q-gutter-lg">
     <div v-if="rooms.length > 0" class="column items-center q-gutter-sm">
       <p>You have {{ rooms.length }} saved rooms.</p>
-      <p>Swipe right for check-in. Swipe left to delete. Tap to open schedule.</p>
+      <p>Swipe right for check-in. Swipe left to delete. Tap to open schedule and share the room.</p>
       <q-btn color="primary" label="Scan more..." to="/util/qr-camera-grant" />
+      <q-btn color="secondary" label="Attempt to check-in to all rooms" @click="bulk_checkin()" />
 
       <NeedsToken type="QToolbar" width="100%" v-slot="{ token }">
         <q-list bordered separator>
@@ -17,9 +18,12 @@
               Delete <q-icon name="delete" />
             </template>
 
-            <q-item clickable v-ripple @click="navigate_to_room_page(room.uuid)">
+            <q-item :clickable="!checkinRunning.includes(room.uuid)" v-ripple @click="navigate_to_room_page(room.uuid)">
               <q-item-section>
-                <q-item-label>{{ room.name }}</q-item-label>
+                <q-item-label>
+                  {{ room.name }}
+                  <q-spinner v-if="checkinRunning.includes(room.uuid)" color="white" />
+                </q-item-label>
                 <q-item-label caption>{{ room.uuid }}</q-item-label>
               </q-item-section>
             </q-item>
@@ -94,6 +98,17 @@ function onRestore(entry: LocalStorageRoomData) {
   // add to start
   rooms.value.unshift(entry);
   localStorage.setItem(LkRudnRu.CheckInRooms, JSON.stringify(rooms.value));
+}
+
+async function bulk_checkin() {
+  for (let i = 0; i < rooms.value.length; i++) {
+    const room = rooms.value[i];
+    if (room == undefined) continue;
+    await Promise.race([
+      quickCheckin(room, tokenStore.token, () => { }),
+      new Promise(resolve => setTimeout(resolve, 500))
+    ]);
+  }
 }
 
 async function quickCheckin(entry: LocalStorageRoomData, token: string, reset: () => void) {

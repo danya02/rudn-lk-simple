@@ -2,6 +2,13 @@
   <q-page v-if="thisRoom !== null">
     <h5>{{ thisRoom.name }}</h5>
 
+    <div class="column items-center q-gutter-sm">
+      <QrcodeCanvas :value="'https://qr.rudn.ru/' + thisRoom.uuid" :size="300" :margin="4" level="H" />
+      <p>Shareable code: <a :href="'https://qr.rudn.ru/' + thisRoom.uuid">
+          {{ 'https://qr.rudn.ru/' + thisRoom.uuid }}</a>
+      </p>
+    </div>
+
     <div v-if="loading_main" class="column items-center q-gutter-sm">
       <q-spinner color="primary" size="3em" />
       <p>Loading main info...</p>
@@ -71,11 +78,14 @@
 </template>
 
 <script setup lang="ts">
+import { QrcodeCanvas } from 'qrcode.vue';
 import { date, Notify } from 'quasar';
 import type { LocalStorageRoomData } from 'src/api/types';
 import { LkRudnRu } from 'src/consts/store-consts';
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+
+
 
 interface LectureData {
   is_upper_week: boolean,
