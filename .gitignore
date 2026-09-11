@@ -33,3 +33,5 @@ yarn-error.log*
 .env.local*
 
 private/
+# Android signing config: contains keystore passwords, keep local
+src-cordova/build.json

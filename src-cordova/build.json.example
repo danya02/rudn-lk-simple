@@ -1,0 +1,19 @@
+{
+  "_comment": "Copy to build.json and fill in the real keystore password. build.json is gitignored on purpose: it holds the Android signing credential. Never commit it.",
+  "android": {
+    "debug": {
+      "keystore": "../private/rudn-simple.keystore",
+      "storePassword": "CHANGEME",
+      "alias": "rudn-simple",
+      "password": "CHANGEME",
+      "keystoreType": "jks"
+    },
+    "release": {
+      "keystore": "../private/rudn-simple.keystore",
+      "storePassword": "CHANGEME",
+      "alias": "rudn-simple",
+      "password": "CHANGEME",
+      "keystoreType": "jks"
+    }
+  }
+}
