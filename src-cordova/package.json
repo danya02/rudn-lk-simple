@@ -15,9 +15,13 @@
   "devDependencies": {
     "cordova-android": "^14.0.1",
     "cordova-plugin-advanced-http": "^3.3.1",
+    "cordova-plugin-brightness": "^0.2.0",
     "cordova-plugin-camera": "^8.0.0",
     "cordova-plugin-file": "^8.1.3",
-    "cordova-plugin-splashscreen": "^6.0.1"
+    "cordova-plugin-insomnia": "^4.3.0",
+    "cordova-plugin-screen-orientation": "^3.0.4",
+    "cordova-plugin-splashscreen": "^6.0.1",
+    "cordova.plugins.diagnostic": "^7.4.0"
   },
   "cordova": {
     "platforms": [
@@ -34,7 +38,10 @@
         "ANDROIDX_VERSION": "1.0.0",
         "ANDROIDX_APPCOMPAT_VERSION": "1.3.1"
       },
-      "cordova-plugin-splashscreen": {}
+      "cordova-plugin-splashscreen": {},
+      "cordova-plugin-screen-orientation": {},
+      "cordova-plugin-brightness": {},
+      "cordova-plugin-insomnia": {}
     }
   }
 }
