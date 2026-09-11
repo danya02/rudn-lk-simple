@@ -15,8 +15,11 @@
 </template>
 
 <script setup lang="ts">
+import { signIn } from 'src/api/auth';
+import { errorMessage } from 'src/api/client';
 import type { LoginResponse } from 'src/api/types';
 import { IdRudnRu } from 'src/consts/store-consts';
+import { notifyError } from 'src/utils/notify';
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -36,34 +39,22 @@ async function login(event: Event) {
   event.preventDefault();
 
   // POST to https://id-api.rudn.ru/api/v1/auth/sign-in
-  let resp;
+  let data: LoginResponse;
   try {
-    resp = await fetch('https://id-api.rudn.ru/api/v1/auth/sign-in', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        username: username.value,
-        password: password.value,
-        ad_person_id: null,
-      })
-    });
+    data = await signIn(username.value, password.value);
   } catch (e) {
-    alert("Error sending login request. Network errors? " + (e as any));
+    notifyError('Error sending login request. ' + errorMessage(e));
     return;
   } finally {
     isLoading.value = false;
   }
 
-  const data: LoginResponse = await resp.json();
-
   if (data.error != null) {
-    error.value = data.error.type + ": " + data.error.description;
+    error.value = data.error.type + ': ' + data.error.description;
   }
   else if (data.data != null) {
     if (data.data.accounts.length === 0) {
-      alert('The login response contained no accounts. This means you do not have any identities in id.rudn.ru. The app might not work properly from this point.');
+      notifyError('The login response contained no accounts. This means you do not have any identities in id.rudn.ru. The app might not work properly from this point.');
     }
 
     localStorage.setItem(IdRudnRu.Username, username.value);

@@ -22,9 +22,11 @@
 
 <script setup lang="ts">
 import { QrcodeCanvas } from 'qrcode.vue';
-import type { QrPassResponse } from 'src/api/types';
+import { errorMessage, statusOf } from 'src/api/client';
+import { generatePass } from 'src/api/person';
 import { LkRudnRu } from 'src/consts/store-consts';
 import { useTokenStore } from 'src/stores/lk_rudn';
+import { notifyError } from 'src/utils/notify';
 import { ref, watch } from 'vue';
 
 const { token } = defineProps<{ token: string }>()
@@ -40,29 +42,21 @@ watch(() => token, (token) => run_refresh(token), {
 const token_store = useTokenStore();
 
 async function run_refresh(token: string, done: () => void = () => { }) {
-  // code.value = '';
   loading.value = true;
   try {
-    const resp = await fetch('https://mobapp-api.rudn.ru/v3/person/generate-pass', {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token,
-      },
-    });
-    if (resp.ok) {
-      const data: QrPassResponse = await resp.json();
-      code.value = data.data.pacs_num;
-      localStorage.setItem(LkRudnRu.PacsCode, code.value);
-
-    } else {
-      token_store.reset();
-    }
+    const data = await generatePass(token);
+    code.value = data.data.pacs_num;
+    localStorage.setItem(LkRudnRu.PacsCode, code.value);
+    // Only cleared on success: a stale code must keep its "may be outdated" warning.
+    outdated.value = false;
   } catch (ex) {
-    alert("Error generating QR pass. Network errors? Try refreshing: " + (ex as any));
+    if (statusOf(ex) === 401) {
+      token_store.reset();
+    } else {
+      notifyError(errorMessage(ex));
+    }
   } finally {
     loading.value = false;
-    outdated.value = false;
     done();
   }
 }

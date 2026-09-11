@@ -6,7 +6,7 @@
 </template>
 
 <script setup lang="ts">
-import type { LkRudnMeResponse } from 'src/api/types';
+import { getMe } from 'src/api/person';
 import { ref, watch } from 'vue';
 
 
@@ -18,18 +18,10 @@ const { token } = defineProps<{ token: string }>();
 watch(() => token, async (token) => {
   loading.value = true;
   try {
-    const resp = await fetch('https://mobapp-api.rudn.ru/v3/person/me', {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token,
-      },
-    });
-    if (resp.ok) {
-      const data: LkRudnMeResponse = await resp.json();
-      nameRef.value = data.data.person.surname_rus + " " + data.data.person.name_rus + " " + data.data.person.patronymic_rus;
-    }
+    const data = await getMe(token);
+    nameRef.value = data.data.person.surname_rus + " " + data.data.person.name_rus + " " + data.data.person.patronymic_rus;
   } catch (ex) {
+    // Failure leaves the '(unknown name...)' placeholder in place; only log it.
     console.error(ex);
   }
   loading.value = false;

@@ -45,10 +45,13 @@
 
 <script setup lang="ts">
 import { Notify } from 'quasar';
+import { errorMessage, statusOf } from 'src/api/client';
+import { attendStart } from 'src/api/person';
 import type { LocalStorageRoomData } from 'src/api/types';
 import NeedsToken from 'src/components/NeedsToken.vue';
 import { LkRudnRu } from 'src/consts/store-consts';
 import { useTokenStore } from 'src/stores/lk_rudn';
+import { notifyError, notifyWarning, notifySuccess } from 'src/utils/notify';
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -114,62 +117,27 @@ async function bulk_checkin() {
 async function quickCheckin(entry: LocalStorageRoomData, token: string, reset: () => void) {
   checkinRunning.value.push(entry.uuid);
   try {
-    // resp = session.post('https://mobapp-api.rudn.ru/qr-scan/v1.0/attend-start',
-    //  json={
-    //  'auditorium_guid': audit_id
-    //  },
-    //  headers={
-    //  'Authorization': f'Bearer {token}',
-
-    const resp = await fetch('https://mobapp-api.rudn.ru/qr-scan/v1.0/attend-start', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token,
-      },
-      body: JSON.stringify({
-        'auditorium_guid': entry.uuid,
-      })
-    });
-
-    if (resp.status === 401) {
-      Notify.create({
-        message: 'Token expired, renewing...',
-        type: 'warning',
-      });
-      tokenStore.reset();
-      return;
-    }
-
-    if (!resp.ok) {
-      throw new Error('Check-in request returned unexpected status: ' + resp.status + ' ' + resp.statusText);
-    }
-
-    const data: {
+    const data = (await attendStart(token, entry.uuid)) as {
       data: {
         success: boolean,
         message: string,
       }
-    } = await resp.json();
+    };
 
     if (data.data.success) {
-      Notify.create({
-        message: 'Server responds: ' + data.data.message,
-        type: 'positive',
-        progress: true,
-        timeout: 3000,
-      });
+      notifySuccess('Server responds: ' + data.data.message);
     } else {
-      Notify.create({
-        message: 'Server responds: ' + data.data.message,
-        type: 'negative',
-        progress: true,
-        timeout: 3000,
-      });
+      notifyError('Server responds: ' + data.data.message);
     }
   }
   catch (ex) {
-    alert("Error sending check-in request. Network errors? " + (ex as any));
+    if (statusOf(ex) === 401) {
+      notifyWarning('Token expired, renewing...');
+      tokenStore.reset();
+      return;
+    }
+
+    notifyError('Could not send the check-in request. ' + errorMessage(ex));
   }
   finally {
     reset();

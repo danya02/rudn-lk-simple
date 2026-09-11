@@ -15,6 +15,8 @@
 </template>
 
 <script setup lang="ts">
+import { errorMessage } from 'src/api/client';
+import { notifyError, notifyWarning } from 'src/utils/notify';
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -54,7 +56,7 @@ async function openSettings() {
     });
   }
   catch (ex) {
-    alert("Error opening settings page: " + (ex as any));
+    notifyError('Could not open your device settings. ' + errorMessage(ex));
   }
 }
 
@@ -72,7 +74,7 @@ async function init() {
   // Running in Cordova
   const plugins: any = window.cordova.plugins;
   if (plugins === undefined || plugins.diagnostic === undefined || plugins.diagnostic === null) {
-    alert("Cordova plugin diagnostic is missing, directing to scanner immediately.")
+    notifyWarning('Camera permission check is unavailable. Opening the scanner directly.');
     console.log("Cordova plugin diagnostic is missing, directing to scanner immediately.")
     await router.replace({ 'name': 'checkin-scanner' });
     return;
@@ -107,7 +109,7 @@ async function init() {
     }
   }
   catch (ex) {
-    alert("Error getting camera permission status. Make sure that the app is allowed to access the camera in the device settings. " + (ex as any));
+    notifyError('Could not check camera permission. Please allow camera access in your device settings. ' + errorMessage(ex));
   }
 }
 
@@ -121,7 +123,7 @@ async function requestPermission() {
   // Running in Cordova
   const plugins: any = window.cordova.plugins;
   if (plugins === undefined || plugins.diagnostic === undefined || plugins.diagnostic === null) {
-    alert("Cordova plugin diagnostic is missing, directing to scanner immediately.")
+    notifyWarning('Camera permission check is unavailable. Opening the scanner directly.');
     console.log("Cordova plugin diagnostic is missing, directing to scanner immediately.")
     await router.replace({ 'name': 'checkin-scanner' });
     return;
@@ -136,13 +138,14 @@ async function requestPermission() {
     switch (result) {
       case diag.permissionStatus.GRANTED:
         console.log("Permission granted to use the camera");
+        await router.replace({ 'name': 'checkin-scanner' });
         break;
       case diag.permissionStatus.NOT_REQUESTED:
         console.log("Permission to use the camera has not been requested yet (but we just did?!)");
         break;
       case diag.permissionStatus.DENIED_ONCE:
         console.log("Permission denied to use the camera - ask again?");
-        alert("You have temporarily rejected this app's request to use the camera. Without this, the app cannot scan QR codes.")
+        notifyWarning('Camera access was declined. The app needs it to scan QR codes.');
         router.back();
         break;
       case diag.permissionStatus.DENIED_ALWAYS:
@@ -152,7 +155,7 @@ async function requestPermission() {
     }
   }
   catch (ex) {
-    alert("Error requesting camera permission. Make sure that the app is allowed to access the camera in the device settings. " + (ex as any));
+    notifyError('Could not request camera permission. Please allow camera access in your device settings. ' + errorMessage(ex));
   }
 }
 

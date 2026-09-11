@@ -79,9 +79,12 @@
 
 <script setup lang="ts">
 import { QrcodeCanvas } from 'qrcode.vue';
-import { date, Notify } from 'quasar';
+import { date } from 'quasar';
+import { errorMessage, statusOf } from 'src/api/client';
+import { getLectureDays, getLecturesForDay, getRoom, toStoredRoom } from 'src/api/rooms';
 import type { LocalStorageRoomData } from 'src/api/types';
 import { LkRudnRu } from 'src/consts/store-consts';
+import { notifyError } from 'src/utils/notify';
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -160,14 +163,14 @@ onMounted(async () => {
   const uuid = route.params.uuid;
   if (uuid === null || uuid === undefined || uuid === '') {
     console.log("No uuid in route params");
-    await router.replace({ 'name': 'lk-checkin' });
+    await router.replace({ 'name': 'checkin' });
   }
 
   // Check that we have a saved room for this
   const savedRoom = savedRooms.find((room) => room.uuid === uuid);
   if (savedRoom === undefined || savedRoom === null) {
     console.log("No saved room for this uuid");
-    await router.replace({ 'name': 'lk-checkin' });
+    await router.replace({ 'name': 'checkin' });
     return;
   }
 
@@ -178,52 +181,21 @@ onMounted(async () => {
 
 async function loadRoom() {
   try {
-    // GET https://api-qr.rudn.ru/api/v1/lecture_room/room/e3ac8763-ba12-4549-ae67-efcf37349246/
-
     if (thisRoom.value === null) {
       return;
     }
-    const resp = await fetch(`https://api-qr.rudn.ru/api/v1/lecture_room/room/${thisRoom.value?.uuid}/`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-    if (resp.ok) {
-      roomDataDownload.value = await resp.json();
+    const data = await getRoom(thisRoom.value.uuid);
+    roomDataDownload.value = data;
 
-      const data: {
-        uuid_url: string,
-        name: string,
-        room: {
-          id: number,
-          short_name: string
-        }
-      } = roomDataDownload.value;
+    const newEntry: LocalStorageRoomData = toStoredRoom(data);
 
-      const newEntry: LocalStorageRoomData = {
-        uuid: data.uuid_url,
-        name: data.name,
-        short_name: data.room.short_name,
-        room_id: data.room.id,
-      };
-
-      // Save the new room info into the array
-      const thisRoomIndex = savedRooms.findIndex((room) => room.uuid === thisRoom.value?.uuid);
-      savedRooms[thisRoomIndex] = newEntry;
-      localStorage.setItem(LkRudnRu.CheckInRooms, JSON.stringify(savedRooms));
-    } else {
-      Notify.create({
-        message: 'Failed to load actual room info',
-        type: 'negative',
-      });
-    }
+    // Save the new room info into the array
+    const thisRoomIndex = savedRooms.findIndex((room) => room.uuid === thisRoom.value?.uuid);
+    savedRooms[thisRoomIndex] = newEntry;
+    localStorage.setItem(LkRudnRu.CheckInRooms, JSON.stringify(savedRooms));
   }
   catch (ex) {
-    Notify.create({
-      message: 'Failed to load actual room info: ' + (ex as any),
-      type: 'negative',
-    });
+    notifyError('Failed to load actual room info: ' + errorMessage(ex));
   }
   finally {
     loading_main.value = false;
@@ -242,6 +214,7 @@ async function loadRoom() {
 
 async function loadLectureDays(view: { year: number, month: number }) {
   isLoadingDaysWithLectures.value = true;
+  daysWithLectures.value = [];
   const { year, month } = view;
   const monthS = month.toString().padStart(2, '0');
 
@@ -250,38 +223,15 @@ async function loadLectureDays(view: { year: number, month: number }) {
   const lastDay = `${year}-${monthS}-${daysInMonth}`;
 
   try {
-    // https://api-qr.rudn.ru/api/v1/lecture_room/schedule/e3ac8763-ba12-4549-ae67-efcf37349246/2025-09-29/2025-10-05/
+    const data = await getLectureDays(thisRoom.value?.uuid ?? '', firstDay, lastDay);
 
-    const resp = await fetch(`https://api-qr.rudn.ru/api/v1/lecture_room/schedule/${thisRoom.value?.uuid}/${firstDay}/${lastDay}/`, {
-      method: 'GET',
-    });
-    if (resp.ok) {
-      const data: {
-        has_lecture: Map<string, boolean>,
-      } = await resp.json();
-
-      console.log(data);
-
-      for (const [key, value] of Object.entries(data.has_lecture)) {
-        if (value === true) {
-          daysWithLectures.value.push(key.replaceAll('-', '/'));
-        }
+    for (const [key, value] of Object.entries(data.has_lecture)) {
+      if (value === true) {
+        daysWithLectures.value.push(key.replaceAll('-', '/'));
       }
-    } else {
-      Notify.create(
-        {
-          message: 'Failed to load room schedule for range: ' + firstDay + ' to ' + lastDay + ': ' + resp.status + ' ' + resp.statusText,
-          type: 'negative',
-        }
-      )
     }
   } catch (ex) {
-    Notify.create(
-      {
-        message: 'Failed to load room schedule for range: ' + firstDay + ' to ' + lastDay + ': ' + (ex as any),
-        type: 'negative',
-      }
-    )
+    notifyError('Failed to load room schedule for range: ' + firstDay + ' to ' + lastDay + ': ' + errorMessage(ex));
   } finally {
     isLoadingDaysWithLectures.value = false;
   }
@@ -294,32 +244,14 @@ async function loadLectureDays(view: { year: number, month: number }) {
 async function loadLectures(info: LocalStorageRoomData, day: string) {
   isLoadingLectures.value = true;
   try {
-    // https://api-qr.rudn.ru/api/v1/lecture_room/schedule/736/2025-10-01/
-    const resp = await fetch(`https://api-qr.rudn.ru/api/v1/lecture_room/schedule/${info.room_id}/${day}/`, {
-      method: 'GET',
-    });
-
-    if (resp.ok) {
-      currentDayLectureData.value = await resp.json();
-      console.log("Fetched schedule for " + day, currentDayLectureData.value);
-    } else if (resp.status === 404) {
+    currentDayLectureData.value = (await getLecturesForDay(info.room_id, day)) as LectureData;
+  } catch (ex) {
+    if (statusOf(ex) === 404) {
       currentDayLectureData.value = null;
     } else {
       currentDayLectureData.value = null;
-      Notify.create(
-        {
-          message: 'Failed to load lectures for ' + day + ': ' + resp.status + ' ' + resp.statusText,
-          type: 'negative',
-        }
-      )
+      notifyError('Failed to load lectures for ' + day + ': ' + errorMessage(ex));
     }
-  } catch (ex) {
-    Notify.create(
-      {
-        message: 'Failed to load lectures for ' + day + ': ' + (ex as any),
-        type: 'negative',
-      }
-    )
   } finally {
     isLoadingLectures.value = false;
   }

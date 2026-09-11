@@ -8,10 +8,13 @@
 
 <script setup lang="ts">
 
-import { useRouter } from 'vue-router';
-import { onMounted, ref } from 'vue';
+import { getOAuthCode, redeemOAuthCode } from 'src/api/auth';
+import { errorMessage, statusOf } from 'src/api/client';
+import type { GenericResponse } from 'src/api/types';
 import { IdRudnRu, LkRudnRu } from 'src/consts/store-consts';
-import type { GenericResponse, LkRudnAuthResponse } from 'src/api/types';
+import { notifyError } from 'src/utils/notify';
+import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 const step2_started = ref(false);
 
@@ -21,63 +24,46 @@ onMounted(oauth_step1);
 async function oauth_step1() {
   const token = localStorage.getItem(IdRudnRu.AccessToken);
   if (token === null) {
-    alert('No token for id.rudn.ru found, please try logging in from the start');
-    await router.replace({ 'name': 'login' });
+    notifyError('No token for id.rudn.ru found, please try logging in from the start');
+    await router.replace({ name: 'login' });
     return;
   }
 
+  let data: GenericResponse;
   try {
-
-    const resp = await fetch('https://id-api.rudn.ru/api/v1/oauth2/continue?client_id=b0db4756-9468-4a9e-b399-17b546b6ea88&redirect_uri=https%3A%2F%2Fmobapp-api.rudn.ru%2Ftoken-rudn-id&response_type=code', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token,
-      },
-      body: '{}'
-    });
-
-    if (resp.ok) {
-      const data: GenericResponse = await resp.json();
-      if (typeof (data.data) === 'string') {
-        step2_started.value = true;
-        await oauth_step2(data.data);
-      } else {
-        alert("Error acquiring OAuth code: " + JSON.stringify(data.error));
-        await router.replace({ 'name': 'login' });
-      }
+    data = await getOAuthCode(token);
+  } catch (e) {
+    if (statusOf(e) !== null) {
+      notifyError('Error acquiring OAuth code: ' + errorMessage(e));
+    } else {
+      notifyError('Error sending OAuth code request. ' + errorMessage(e));
     }
-
-  } catch (ex) {
-    alert("Error sending OAuth code request. Network errors? " + (ex as any));
-    await router.replace({ 'name': 'login' });
+    await router.replace({ name: 'login' });
+    return;
   }
-};
+
+  if (typeof data.data === 'string') {
+    step2_started.value = true;
+    await oauth_step2(data.data);
+  } else {
+    notifyError('Error acquiring OAuth code: ' + JSON.stringify(data.error));
+    await router.replace({ name: 'login' });
+  }
+}
 
 async function oauth_step2(received_code_url: string) {
-  const replaced = received_code_url.replace('https://mobapp-api.rudn.ru/token-rudn-id', 'https://mobapp-api.rudn.ru/v1/auth/token-rudn-id');
   try {
-    const resp = await fetch(replaced, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer null',
-      },
-    });
-
-    if (!resp.ok) {
-      const data: GenericResponse = await resp.json();
-      alert("Error trading OAuth code for lk.rudn.ru token: " + JSON.stringify(data.error));
-      await router.replace({ 'name': 'login' });
+    const data = await redeemOAuthCode(received_code_url);
+    localStorage.setItem(LkRudnRu.AccessToken, data.data.token);
+    localStorage.setItem(LkRudnRu.SuccessfulAccess, 'true');
+    await router.replace({ name: 'hub' });
+  } catch (e) {
+    if (statusOf(e) !== null) {
+      notifyError('Error trading OAuth code for lk.rudn.ru token: ' + errorMessage(e));
     } else {
-      const data: LkRudnAuthResponse = await resp.json();
-      localStorage.setItem(LkRudnRu.AccessToken, data.data.token);
-      localStorage.setItem(LkRudnRu.SuccessfulAccess, "true");
-      await router.replace({ 'name': 'hub' });
+      notifyError('Error trading OAuth code for lk.rudn.ru token. ' + errorMessage(e));
     }
-  } catch (ex) {
-    alert("Error trading OAuth code for lk.rudn.ru token. Network errors? " + (ex as any));
-    await router.replace({ 'name': 'login' });
+    await router.replace({ name: 'login' });
   }
 }
 

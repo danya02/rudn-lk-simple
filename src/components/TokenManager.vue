@@ -6,19 +6,28 @@
     </div>
   </q-linear-progress>
   <q-banner inline-actions class="text-white bg-red" v-if="full_failure">
-    Could not recover your session automatically.
-    Please log in manually.
+    <template v-if="failure_is_network">
+      Could not reach RUDN servers. You may be offline &mdash; showing saved data.
+    </template>
+    <template v-else>
+      Could not recover your session automatically.
+      Please log in manually.
+    </template>
     <template v-slot:action>
-      <q-btn flat color="white" label="Log in" @click="restart_auth" />
+      <q-btn v-if="failure_is_network" flat color="white" label="Retry" @click="refresh" />
+      <q-btn v-else flat color="white" label="Log in" @click="restart_auth" />
     </template>
   </q-banner>
 </template>
 
 <script setup lang="ts">
-import { Notify } from 'quasar';
-import type { ContinueResponse, GenericResponse, LkRudnAuthResponse, LoginResponse } from 'src/api/types';
+import { continueDirect, getOAuthCode, redeemOAuthCode, signIn } from 'src/api/auth';
+import { isNetworkError } from 'src/api/client';
+import { getMe } from 'src/api/person';
 import { IdRudnRu, LkRudnRu, reset_all_auth } from 'src/consts/store-consts';
 import { useTokenStore } from 'src/stores/lk_rudn';
+import { recordEvent } from 'src/utils/diagnostics';
+import { notifySuccess } from 'src/utils/notify';
 import { onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -28,6 +37,12 @@ const progress_bar_value = ref(0);
 const progress_bar_text = ref("");
 
 const full_failure = ref(false);
+// Set when the run failed because the network was unreachable rather than
+// because the stored credentials were rejected. The two need different advice.
+const failure_is_network = ref(false);
+// Steps handle their own fetch exceptions, so they flag network trouble here
+// rather than letting it propagate to the driver loop.
+let saw_network_error = false;
 
 const token_store = useTokenStore();
 const router = useRouter();
@@ -44,12 +59,6 @@ defineExpose({
   force_refresh,
 });
 
-// watch(() => token_store.token, async () => {
-//   if (token_store.token === '' || token_store.isNull) {
-//     await refresh();
-//   }
-// });
-
 watch(() => token_store.reset_at, refresh);
 
 async function force_refresh() {
@@ -58,13 +67,14 @@ async function force_refresh() {
 }
 
 async function refresh() {
-  console.log(JSON.stringify(token_store.token));
   token_store.is_ready = false;
-  const steps = [
-    login_password,
-    trade_ephemeral_token_for_real,
-    trade_id_for_lk_token,
-    final_check,
+  // `id` is for logs, `label` is what the user reads. Neither may be derived
+  // from the function name: minified builds rewrite it to a single letter.
+  const steps: { id: string; label: string; run: () => Promise<Outcome> }[] = [
+    { id: 'login_password', label: 'Signing in…', run: login_password },
+    { id: 'trade_ephemeral_token_for_real', label: 'Confirming your login…', run: trade_ephemeral_token_for_real },
+    { id: 'trade_id_for_lk_token', label: 'Getting account access…', run: trade_id_for_lk_token },
+    { id: 'final_check', label: 'Checking your session…', run: final_check },
   ];
 
   let current_step_to_run = steps.length - 1;
@@ -72,95 +82,83 @@ async function refresh() {
 
   running.value = true;
   full_failure.value = false;
+  failure_is_network.value = false;
+  saw_network_error = false;
 
   while (current_step_to_run >= 0 && current_step_to_run < steps.length) {
     progress_bar_value.value = (steps.length - current_step_to_run) / steps.length;
-    progress_bar_text.value = steps[current_step_to_run]?.name ?? "";
+    const step = steps[current_step_to_run]!;
+    progress_bar_text.value = step.label;
 
     if (steps_budget <= 0) {
-      full_failure.value = true;
-      running.value = false;
       break;
     }
 
-    const fn = steps[current_step_to_run] as (() => Promise<Outcome>);
     let outcome;
     try {
-      console.log("Running step: " + fn.name);
-      outcome = await fn();
+      console.log("Running step: " + step.id);
+      outcome = await step.run();
     } catch (ex) {
-      Notify.create({
-        message: 'Network error in ' + fn.name + ': ' + (ex as any),
-        color: 'negative',
-        position: 'top',
-        progress: true,
-      });
+      console.error("Network error in " + step.id, ex);
+      saw_network_error = true;
       outcome = Outcome.FailRollup;
     }
     steps_budget -= 1;
 
-    console.log("Outcome for step " + fn.name + ": " + outcome);
+    console.log("Outcome for step " + step.id + ": " + outcome);
 
     if (outcome === Outcome.FailRollup) {
       current_step_to_run -= 1;
-      console.log("FailRollup in " + fn.name + ", next running " + current_step_to_run);
+      recordEvent('auth', `${step.id} failed, rolling back to step ${current_step_to_run}`);
     }
     else {
       current_step_to_run += 1;
-      console.log("Success in " + fn.name + ", next running " + current_step_to_run);
+      recordEvent('auth', `${step.id} ok, advancing to step ${current_step_to_run}`);
     }
   }
+
   running.value = false;
-  token_store.is_ready = true;
 
-  Notify.create({
-    message: 'Token refresh OK!',
-    color: 'positive',
-    position: 'top',
-    progress: true,
-  });
+  // The loop only ends successfully by walking off the end of the step list.
+  // Exhausting the budget, or rolling back past the first step, are failures.
+  const succeeded = current_step_to_run >= steps.length;
+  recordEvent(
+    'auth',
+    succeeded
+      ? `ladder succeeded with ${steps_budget} of 10 steps left`
+      : `ladder FAILED (budget left ${steps_budget}, network trouble: ${saw_network_error})`,
+  );
+  full_failure.value = !succeeded;
+  failure_is_network.value = !succeeded && saw_network_error;
+  token_store.is_ready = succeeded;
 
+  if (succeeded) {
+    notifySuccess('Signed in.');
+  }
 }
 
 async function final_check(): Promise<Outcome> {
   const token = localStorage.getItem(LkRudnRu.AccessToken);
 
   if (token === null || token === undefined) {
-    console.log("Token is null");
     return Outcome.FailRollup;
   }
 
-  // get 'me' data:
-  // https://mobapp-api.rudn.ru/v3/person/me
-
   try {
-    const resp = await fetch('https://mobapp-api.rudn.ru/v3/person/me', {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token,
-      },
-    });
-    if (resp.ok) {
-      // The token is still valid
-      console.log("Token is valid");
-      token_store.token = token;
-      localStorage.setItem(LkRudnRu.SuccessfulAccess, "true");
-      return Outcome.Ok;
-    } else {
-      // The token is not valid, need to proceed to previous step
-      console.log("Token is not valid, need to refresh");
-      token_store.token = 'null';
-      localStorage.removeItem(LkRudnRu.AccessToken);
+    await getMe(token);
+    // The token is still valid.
+    token_store.token = token;
+    localStorage.setItem(LkRudnRu.SuccessfulAccess, "true");
+    return Outcome.Ok;
+  } catch (ex) {
+    if (isNetworkError(ex)) {
+      // Offline: the token may well still be good, so do not throw it away.
+      saw_network_error = true;
       return Outcome.FailRollup;
     }
-  } catch (ex) {
-    Notify.create({
-      message: 'Network error in verify step: ' + (ex as any),
-      color: 'negative',
-      position: 'top',
-      progress: true,
-    });
+    // The server rejected it, so roll back and rebuild the token.
+    token_store.token = 'null';
+    localStorage.removeItem(LkRudnRu.AccessToken);
     return Outcome.FailRollup;
   }
 }
@@ -171,51 +169,17 @@ async function trade_id_for_lk_token(): Promise<Outcome> {
     return Outcome.FailRollup;
   }
 
-  // Use token to acquire OAuth link
-
   try {
-    const resp = await fetch('https://id-api.rudn.ru/api/v1/oauth2/continue?client_id=b0db4756-9468-4a9e-b399-17b546b6ea88&redirect_uri=https%3A%2F%2Fmobapp-api.rudn.ru%2Ftoken-rudn-id&response_type=code', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + id_token,
-      },
-    });
-    if (resp.ok) {
-      const data: GenericResponse = await resp.json();
-      if (typeof (data.data) === 'string') {
-        // Got OAuth link,
-        // now we query that to get lk.rudn.ru token
-        const replaced = data.data.replace('https://mobapp-api.rudn.ru/token-rudn-id', 'https://mobapp-api.rudn.ru/v1/auth/token-rudn-id');
-        const resp = await fetch(replaced, {
-          method: 'GET',
-          headers: {
-            'Authorization': 'Bearer null',
-          },
-        });
-
-        if (!resp.ok) {
-          return Outcome.FailRollup;
-        } else {
-          const data: LkRudnAuthResponse = await resp.json();
-          localStorage.setItem(LkRudnRu.AccessToken, data.data.token);
-          token_store.token = data.data.token;
-          return Outcome.Ok;
-        }
-      } else {
-        return Outcome.FailRollup;
-      }
-    } else {
+    const data = await getOAuthCode(id_token);
+    if (typeof data.data !== 'string') {
       return Outcome.FailRollup;
     }
-
+    const lk = await redeemOAuthCode(data.data);
+    localStorage.setItem(LkRudnRu.AccessToken, lk.data.token);
+    token_store.token = lk.data.token;
+    return Outcome.Ok;
   } catch (ex) {
-    Notify.create({
-      message: 'Network error in trade step: ' + (ex as any),
-      color: 'negative',
-      position: 'top',
-      progress: true,
-    });
+    if (isNetworkError(ex)) saw_network_error = true;
     return Outcome.FailRollup;
   }
 }
@@ -227,29 +191,17 @@ async function trade_ephemeral_token_for_real(): Promise<Outcome> {
   }
 
   try {
-    const resp = await fetch('https://id-api.rudn.ru/api/v1/auth/continue/direct', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token,
-      }
-    });
-
-    if (!resp.ok) {
-      return Outcome.FailRollup;
-    }
-
-    const answer: ContinueResponse = await resp.json();
+    const answer = await continueDirect(token);
     localStorage.setItem(IdRudnRu.AccessToken, answer.access_token);
+    // Kept for a future refresh step; see the note in store-consts.ts.
+    if (answer.refresh_token) {
+      localStorage.setItem(IdRudnRu.RefreshToken, answer.refresh_token);
+    }
+    localStorage.setItem(IdRudnRu.AccessTokenObtainedAt, String(Date.now()));
     return Outcome.Ok;
 
   } catch (ex) {
-    Notify.create({
-      message: 'Network error in trade_ephemeral_token_for_real step: ' + (ex as any),
-      color: 'negative',
-      position: 'top',
-      progress: true,
-    });
+    if (isNetworkError(ex)) saw_network_error = true;
     return Outcome.FailRollup;
   }
 
@@ -274,34 +226,11 @@ async function login_password(): Promise<Outcome> {
 
 
   try {
-    const resp = await fetch('https://id-api.rudn.ru/api/v1/auth/sign-in', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        username: username,
-        password: password,
-        ad_person_id: ad_person_id,
-      })
-    });
-
-    if (resp.ok) {
-      const data: LoginResponse = await resp.json();
-      localStorage.setItem(IdRudnRu.AccessToken, data.data.access_token);
-      return Outcome.Ok;
-    }
-    else {
-      return Outcome.FailRollup;
-    }
-
+    const data = await signIn(username, password, ad_person_id);
+    localStorage.setItem(IdRudnRu.AccessToken, data.data.access_token);
+    return Outcome.Ok;
   } catch (ex) {
-    Notify.create({
-      message: 'Network error in login step: ' + (ex as any),
-      color: 'negative',
-      position: 'top',
-      progress: true,
-    });
+    if (isNetworkError(ex)) saw_network_error = true;
     return Outcome.FailRollup;
   }
 

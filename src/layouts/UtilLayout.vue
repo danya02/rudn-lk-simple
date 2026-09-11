@@ -5,7 +5,7 @@
         <q-toolbar-title> Util window </q-toolbar-title>
 
         <!-- back button -->
-        <q-btn flat round dense icon="arrow_back" @click="router.back()" />
+        <q-btn flat round dense icon="arrow_back" @click.stop="router.back()" />
       </q-toolbar>
     </q-header>
 

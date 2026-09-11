@@ -34,8 +34,11 @@
 
 <script setup lang="ts">
 import { Notify } from 'quasar';
+import { errorMessage } from 'src/api/client';
+import { getRoom, toStoredRoom } from 'src/api/rooms';
 import type { LocalStorageRoomData } from 'src/api/types';
 import { Device, LkRudnRu } from 'src/consts/store-consts';
+import { notifyError } from 'src/utils/notify';
 import { ref } from 'vue';
 import type { DetectedBarcode } from 'vue-qrcode-reader';
 import { QrcodeStream } from 'vue-qrcode-reader';
@@ -201,41 +204,11 @@ function paintOutline(detectedCodes: DetectedBarcode[], ctx: CanvasRenderingCont
 
 async function fetchRoomInfo(uuid: string) {
   try {
-    // GET https://api-qr.rudn.ru/api/v1/lecture_room/room/e3ac8763-ba12-4549-ae67-efcf37349246/
-
-    const resp = await fetch(`https://api-qr.rudn.ru/api/v1/lecture_room/room/${uuid}/`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-    if (resp.ok) {
-      const data: {
-        uuid_url: string,
-        name: string,
-        room: {
-          id: number,
-          short_name: string
-        }
-      } = await resp.json();
-
-      const newEntry: LocalStorageRoomData = {
-        uuid: data.uuid_url,
-        name: data.name,
-        short_name: data.room.short_name,
-        room_id: data.room.id
-      }
-
-      newEntries.value.push(newEntry);
-    }
-
+    const data = await getRoom(uuid);
+    newEntries.value.push(toStoredRoom(data));
   }
   catch (ex) {
-    Notify.create({
-      message: 'Error fetching room info: ' + (ex as any),
-      color: 'negative',
-      position: 'top',
-    });
+    notifyError('Error fetching room info: ' + errorMessage(ex));
   }
   finally {
     fetchTasks.value.delete(uuid);
@@ -281,7 +254,7 @@ function onError(err: any) {
     error += err.message
   }
 
-  alert("Error while scanning QR code: " + error);
+  notifyError('Camera problem: ' + error);
 
   cameraRunning.value = false;
   cameraError.value = error;

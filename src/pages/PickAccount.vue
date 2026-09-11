@@ -22,8 +22,11 @@
 </template>
 
 <script setup lang="ts">
-import type { ContinueResponse, GenericResponse, LoginAccount, LoginData } from 'src/api/types';
+import { continueDirect, signIn } from 'src/api/auth';
+import { errorMessage, statusOf } from 'src/api/client';
+import type { ContinueResponse, LoginAccount, LoginData } from 'src/api/types';
 import { IdRudnRu } from 'src/consts/store-consts';
+import { notifyError } from 'src/utils/notify';
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -44,59 +47,45 @@ async function onclick(option: LoginAccount) {
 
   // login again as the new account
   try {
-    const resp = await fetch('https://id-api.rudn.ru/api/v1/auth/sign-in', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + localStorage.getItem(IdRudnRu.AccessToken),
-      },
-      body: JSON.stringify({
-        ad_person_id: option.ad_person_id,
-        username: username.value,
-        password: password.value
-      })
-    });
-
-    const data: GenericResponse = await resp.json();
-
-    if (resp.ok) {
-      localStorage.setItem(IdRudnRu.SelectedAdPersonId, option.ad_person_id);
-
-      const loginData = (data.data as LoginData);
-
-      // After getting the initial token, we need to trade it for the real token:
-      const resp2 = await fetch('https://id-api.rudn.ru/api/v1/auth/continue/direct', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + loginData.access_token,
-        }
-      });
-
-      const data2: unknown = await resp2.json();
-      if (resp2.ok) {
-        const continueResp = (data2 as ContinueResponse);
-        if (continueResp.token_type !== "Bearer") {
-          alert("In continue/direct call, token_type is not 'Bearer', but: " + JSON.stringify(continueResp) + ' App may not work properly from this point.');
-        }
-
-        localStorage.setItem(IdRudnRu.AccessToken, continueResp.access_token);
-        await router.replace({ 'name': 'acquire-lk-code' });
+    let loginData: LoginData;
+    try {
+      // The ephemeral token from the first sign-in is sent along, as the
+      // original inline fetch did.
+      loginData = (await signIn(username.value, password.value, Number(option.ad_person_id),
+        localStorage.getItem(IdRudnRu.AccessToken))).data;
+    } catch (e) {
+      if (statusOf(e) !== null) {
+        notifyError('Error logging in as new identity: ' + errorMessage(e));
+      } else {
+        notifyError('Error logging in with identity. ' + errorMessage(e));
       }
-      else {
-        alert("Error in continue/direct call: " + JSON.stringify(data2));
-      }
-
-
-    } else {
-      alert("Error logging in as new identity: " + JSON.stringify(data.error));
+      return;
     }
 
-  } catch (ex) {
-    alert("Error logging in with identity. Network errors? " + (ex as any));
+    localStorage.setItem(IdRudnRu.SelectedAdPersonId, option.ad_person_id);
+
+    // After getting the initial token, we need to trade it for the real token:
+    let continueResp: ContinueResponse;
+    try {
+      continueResp = await continueDirect(loginData.access_token);
+    } catch (e) {
+      if (statusOf(e) !== null) {
+        notifyError('Error in continue/direct call: ' + errorMessage(e));
+      } else {
+        notifyError('Error logging in with identity. ' + errorMessage(e));
+      }
+      return;
+    }
+
+    if (continueResp.token_type !== 'Bearer') {
+      notifyError("In continue/direct call, token_type is not 'Bearer', but: " + JSON.stringify(continueResp) + ' App may not work properly from this point.');
+    }
+
+    localStorage.setItem(IdRudnRu.AccessToken, continueResp.access_token);
+    await router.replace({ 'name': 'acquire-lk-code' });
   } finally {
     loading.value = false;
-    current_option_id.value = "";
+    current_option_id.value = '';
   }
 }
 </script>
