@@ -2,6 +2,24 @@
 // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file
 
 import { defineConfig } from '#q-app/wrappers';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Resolved against this file rather than the working directory: the Cordova
+// build runs from src-cordova/, where relative paths point somewhere else.
+const projectRoot = dirname(fileURLToPath(import.meta.url));
+
+// Stamped into the bundle so the diagnostics report can name the exact build a
+// user is running. Read here rather than imported, because the Cordova version
+// code lives in config.xml and the app version in package.json.
+const APP_VERSION: string = JSON.parse(
+  readFileSync(join(projectRoot, 'package.json'), 'utf-8'),
+).version;
+const ANDROID_VERSION_CODE =
+  /android-versionCode="(\d+)"/.exec(
+    readFileSync(join(projectRoot, 'src-cordova/config.xml'), 'utf-8'),
+  )?.[1] ?? 'unknown';
 
 export default defineConfig((/* ctx */) => {
   return {
@@ -52,7 +70,10 @@ export default defineConfig((/* ctx */) => {
 
       // publicPath: '/',
       // analyze: true,
-      // env: {},
+      env: {
+        APP_VERSION,
+        ANDROID_VERSION_CODE,
+      },
       // rawDefine: {}
       // ignorePublicFolder: true,
       // minify: false,
