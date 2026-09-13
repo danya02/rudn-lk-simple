@@ -38,7 +38,9 @@ export type LoginError = v.InferOutput<typeof LoginErrorSchema>;
 export const LoginAccountSchema = v.object({
   email: v.string(),
   fio: v.string(),
-  ad_person_id: v.string(),
+  // A JSON number upstream, not a string -- localStorage consumers have to
+  // String() it on the way in.
+  ad_person_id: v.number(),
 });
 export type LoginAccount = v.InferOutput<typeof LoginAccountSchema>;
 
@@ -46,15 +48,15 @@ export const LoginDataSchema = v.object({
   access_token: v.string(),
   accounts: v.array(LoginAccountSchema),
   // Unread by this app; see the note above.
-  expires_in: v.optional(v.string()),
-  need_auth: v.optional(v.boolean()),
+  expires_in: v.nullish(v.string()),
+  need_auth: v.nullish(v.boolean()),
 });
 export type LoginData = v.InferOutput<typeof LoginDataSchema>;
 
 export const LoginResponseSchema = v.object({
   data: LoginDataSchema,
   error: v.nullish(LoginErrorSchema),
-  trace: v.optional(v.string()),
+  trace: v.nullish(v.string()),
 });
 export type LoginResponse = v.InferOutput<typeof LoginResponseSchema>;
 
@@ -75,8 +77,8 @@ export const ContinueResponseSchema = v.object({
   // PickAccount checks this is 'Bearer', so its absence is worth catching.
   token_type: v.string(),
   // TokenManager already treats a missing refresh token as normal.
-  refresh_token: v.optional(v.string()),
-  expires_in: v.optional(v.number()),
+  refresh_token: v.nullish(v.string()),
+  expires_in: v.nullish(v.number()),
 });
 export type ContinueResponse = v.InferOutput<typeof ContinueResponseSchema>;
 
@@ -106,8 +108,8 @@ export const QrPassResponseSchema = v.object({
      * The same pass as hex. Unused by this app: the official app hands it to
      * the Sigur access SDK, which identifies over Bluetooth LE rather than NFC.
      */
-    pacs_num_hex: v.optional(v.string()),
-    covid_info_show: v.optional(v.boolean()),
+    pacs_num_hex: v.nullish(v.string()),
+    covid_info_show: v.nullish(v.boolean()),
   }),
   error: v.unknown(),
 });

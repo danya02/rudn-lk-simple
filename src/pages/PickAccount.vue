@@ -31,7 +31,7 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 const loading = ref(false);
-const current_option_id = ref("");
+const current_option_id = ref<number | null>(null);
 
 const router = useRouter();
 
@@ -51,7 +51,7 @@ async function onclick(option: LoginAccount) {
     try {
       // The ephemeral token from the first sign-in is sent along, as the
       // original inline fetch did.
-      loginData = (await signIn(username.value, password.value, Number(option.ad_person_id),
+      loginData = (await signIn(username.value, password.value, option.ad_person_id,
         localStorage.getItem(IdRudnRu.AccessToken))).data;
     } catch (e) {
       if (statusOf(e) !== null) {
@@ -62,7 +62,7 @@ async function onclick(option: LoginAccount) {
       return;
     }
 
-    localStorage.setItem(IdRudnRu.SelectedAdPersonId, option.ad_person_id);
+    localStorage.setItem(IdRudnRu.SelectedAdPersonId, String(option.ad_person_id));
 
     // After getting the initial token, we need to trade it for the real token:
     let continueResp: ContinueResponse;
@@ -85,7 +85,7 @@ async function onclick(option: LoginAccount) {
     await router.replace({ 'name': 'acquire-lk-code' });
   } finally {
     loading.value = false;
-    current_option_id.value = '';
+    current_option_id.value = null;
   }
 }
 </script>

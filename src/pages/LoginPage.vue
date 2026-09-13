@@ -62,7 +62,7 @@ async function login(event: Event) {
     localStorage.setItem(IdRudnRu.AccessToken, data.data.access_token);
 
     if (data.data.accounts.length === 1) {
-      localStorage.setItem(IdRudnRu.SelectedAdPersonId, data.data.accounts[0]!.ad_person_id);
+      localStorage.setItem(IdRudnRu.SelectedAdPersonId, String(data.data.accounts[0]!.ad_person_id));
       await router.replace({ 'name': 'acquire-lk-code' });
     } else {
       localStorage.setItem(IdRudnRu.AdPersonOptions, JSON.stringify(data.data.accounts));
