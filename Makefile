@@ -22,3 +22,25 @@ build-release:
 	@test -f src-cordova/build.json || \
 		{ echo "src-cordova/build.json is missing; copy build.json.example and fill it in."; exit 1; }
 	npx quasar build -m cordova -T android
+
+# PWA bundle, into dist/pwa/.
+build-pwa:
+	npx quasar build -m pwa
+
+# Deploy the PWA to lk.rudn-lab.ru.
+#
+# published/ is a separate clone of rudn-lab/lk.rudn-lab.ru living inside this
+# working tree (gitignored, not a submodule). Its CNAME is not part of the
+# Quasar output, so the copy preserves it and deletes everything else.
+#
+# This pushes to a public site; it stops for confirmation first.
+deploy-pwa: build-pwa
+	@test -d published/.git || \
+		{ echo "published/ is not a clone of rudn-lab/lk.rudn-lab.ru."; exit 1; }
+	@test -f published/CNAME || { echo "published/CNAME is missing."; exit 1; }
+	rsync -a --delete --exclude .git --exclude CNAME dist/pwa/ published/
+	@git -C published status --short
+	@printf 'Push the above to lk.rudn-lab.ru? [y/N] ' && read ans && test "$$ans" = y
+	git -C published add -A
+	git -C published commit -m "Deploy $$(git rev-parse --short HEAD)$$(git diff-index --quiet HEAD -- || echo ' (dirty)')"
+	git -C published push
