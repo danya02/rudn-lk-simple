@@ -30,7 +30,7 @@ const MAX_EVENTS = 40;
 /** Longest response body stored per event, so one HTML error page cannot evict the buffer. */
 const MAX_BODY_CHARS = 500;
 
-export type EventKind = 'http' | 'error' | 'auth';
+export type EventKind = 'http' | 'error' | 'auth' | 'info';
 
 interface DiagnosticEvent {
   /** ms since page load. Relative, so no clock skew and no timezone to leak. */
