@@ -35,3 +35,11 @@ yarn-error.log*
 private/
 # Android signing config: contains keystore passwords, keep local
 src-cordova/build.json
+
+# Deploy target for the PWA (lk.rudn-lab.ru): a separate clone of
+# rudn-lab/lk.rudn-lab.ru, not a submodule. Ignored so it is not recorded here
+# as a bare gitlink -- it has its own history and is pushed from inside.
+published/
+
+# Reverse-engineering scratch space (the official APK lives here).
+tmp/
