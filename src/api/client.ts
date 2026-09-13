@@ -10,6 +10,7 @@
  * report what the server actually said without needing a console.
  */
 
+import * as v from 'valibot';
 import { recordEvent } from 'src/utils/diagnostics';
 
 export const Hosts = {
@@ -36,6 +37,23 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The server answered with 2xx, but the body was not the shape we expect.
+ *
+ * Distinct from ApiError on purpose: a 401 means "log in again" and the auth
+ * ladder knows how to repair it, whereas this means the API changed under us and
+ * no amount of re-authenticating will help.
+ */
+export class ValidationError extends Error {
+  constructor(
+    readonly url: string,
+    readonly issues: string,
+  ) {
+    super(`Unexpected response shape from ${url}: ${issues}`);
+    this.name = 'ValidationError';
+  }
+}
+
 /** The request never produced a response: offline, DNS failure, TLS error. */
 export class NetworkError extends Error {
   constructor(override readonly cause: unknown) {
@@ -58,6 +76,11 @@ export function statusOf(e: unknown): number | null {
 export function errorMessage(e: unknown): string {
   if (e instanceof NetworkError) return 'Could not reach the server. You may be offline.';
   if (e instanceof ApiError) return `Server error ${e.status} ${e.statusText}`;
+  if (e instanceof ValidationError) {
+    // Deliberately not the raw issue list: it is long, and the actionable part
+    // for a user is that this is not their fault and not fixable by retrying.
+    return 'The server sent something this app did not understand. It may have been updated.';
+  }
   if (e instanceof Error) return e.message;
   return String(e);
 }
@@ -86,13 +109,21 @@ interface RequestOptions {
 }
 
 /**
- * Perform a request and parse the JSON body.
+ * Perform a request, parse the JSON body, and validate it against `schema`.
  *
- * Throws NetworkError if the request never completed, ApiError for any non-2xx.
- * Returns the parsed body cast to T -- there is no runtime validation yet, so
- * T is a promise about the shape, not a guarantee.
+ * Throws NetworkError if the request never completed, ApiError for any non-2xx,
+ * and ValidationError if the body did not match. The return type is inferred
+ * from the schema, so the static type is backed by an actual runtime check
+ * rather than an assertion.
+ *
+ * Endpoints whose body we genuinely do not read pass `v.unknown()`, which makes
+ * "nobody checked this" explicit at the call site instead of invisible.
  */
-export async function request<T>(url: string, options: RequestOptions = {}): Promise<T> {
+export async function request<S extends v.GenericSchema>(
+  url: string,
+  schema: S,
+  options: RequestOptions = {},
+): Promise<v.InferOutput<S>> {
   const { method = 'GET', token, body, noContentType = false } = options;
 
   const headers: Record<string, string> = {};
@@ -127,5 +158,24 @@ export async function request<T>(url: string, options: RequestOptions = {}): Pro
     throw new ApiError(resp.status, resp.statusText, text);
   }
 
-  return (await resp.json()) as T;
+  let parsed: unknown;
+  try {
+    parsed = await resp.json();
+  } catch (ex) {
+    recordEvent('http', `${method} ${redactUrl(url)} -> body was not JSON: ${String(ex)}`);
+    throw new ValidationError(redactUrl(url), 'the body was not JSON');
+  }
+
+  const result = v.safeParse(schema, parsed);
+  if (!result.success) {
+    // One line per bad field, pathed, so a diagnostics report says exactly which
+    // part of the response moved -- that is the whole point of validating here.
+    const issues = result.issues
+      .map((issue) => `${v.getDotPath(issue) ?? '<root>'}: ${issue.message}`)
+      .join('; ');
+    recordEvent('http', `${method} ${redactUrl(url)} -> unexpected shape: ${issues}`);
+    throw new ValidationError(redactUrl(url), issues);
+  }
+
+  return result.output;
 }

@@ -1,76 +1,123 @@
-export interface LoginResponse {
-  data: LoginData;
-  error: LoginError | null;
-  trace: string;
-}
+/**
+ * Shapes of the RUDN API responses, as valibot schemas.
+ *
+ * These endpoints are reverse-engineered and undocumented, so a TypeScript
+ * interface here was only ever a *claim* about what the server sends. Each
+ * shape is a runtime schema instead, and its static type is inferred from it --
+ * so the two can never drift apart, and a server that changes shape produces a
+ * named error at the call rather than `undefined` several frames later.
+ *
+ * Two deliberate choices:
+ *
+ *  - **Objects are not strict.** Unknown keys are ignored, not rejected. The
+ *    real responses carry far more than we read (a room also has `territory`,
+ *    `content`, `image`, and a second `uid` distinct from `uuid_url`), and a
+ *    university adding a field must not break the app.
+ *  - **Only what we actually use is required.** Fields the app never reads are
+ *    marked optional, so that upstream dropping or renaming one is a no-op
+ *    rather than an outage. Requiring a field we ignore would make validation
+ *    *reduce* reliability, which is the opposite of the point.
+ */
 
-export interface GenericResponse {
-  data: unknown;
-  error: unknown;
-}
+import * as v from 'valibot';
 
-export interface LoginError {
-  type: string;
-  description: string;
-}
+/** A person's name, as returned by both the auth and the /me endpoints. */
+const PersonSchema = v.object({
+  id: v.number(),
+  name_rus: v.string(),
+  surname_rus: v.string(),
+  patronymic_rus: v.string(),
+});
 
-export interface LoginData {
-  access_token: string;
-  expires_in: string;
-  need_auth: boolean;
-  accounts: LoginAccount[];
-}
+export const LoginErrorSchema = v.object({
+  type: v.string(),
+  description: v.string(),
+});
+export type LoginError = v.InferOutput<typeof LoginErrorSchema>;
 
-export interface LoginAccount {
-  email: string;
-  fio: string;
-  ad_person_id: string;
-}
+export const LoginAccountSchema = v.object({
+  email: v.string(),
+  fio: v.string(),
+  ad_person_id: v.string(),
+});
+export type LoginAccount = v.InferOutput<typeof LoginAccountSchema>;
 
-export interface ContinueResponse {
-  token_type: string;
-  expires_in: number;
-  access_token: string;
-  refresh_token: string;
-}
+export const LoginDataSchema = v.object({
+  access_token: v.string(),
+  accounts: v.array(LoginAccountSchema),
+  // Unread by this app; see the note above.
+  expires_in: v.optional(v.string()),
+  need_auth: v.optional(v.boolean()),
+});
+export type LoginData = v.InferOutput<typeof LoginDataSchema>;
 
-export interface LkRudnAuthResponse {
-  data: {
-    token: string;
-    person: {
-      id: number;
-      name_rus: string;
-      surname_rus: string;
-      patronymic_rus: string;
-    };
-  };
-  error: unknown;
-}
+export const LoginResponseSchema = v.object({
+  data: LoginDataSchema,
+  error: v.nullish(LoginErrorSchema),
+  trace: v.optional(v.string()),
+});
+export type LoginResponse = v.InferOutput<typeof LoginResponseSchema>;
 
-export interface LkRudnMeResponse {
-  data: {
-    person: {
-      id: number;
-      name_rus: string;
-      surname_rus: string;
-      patronymic_rus: string;
-    };
-  };
-  error: unknown;
-}
+/**
+ * A response whose `data` we treat as opaque.
+ *
+ * Used by the OAuth continue call, where `data` is a bare URL string that the
+ * next step rewrites and fetches.
+ */
+export const GenericResponseSchema = v.object({
+  data: v.unknown(),
+  error: v.unknown(),
+});
+export type GenericResponse = v.InferOutput<typeof GenericResponseSchema>;
 
-export interface QrPassResponse {
-  data: {
-    pacs_num: string;
-    pacs_num_hex: string;
-    covid_info_show: boolean;
-  };
-  error: unknown;
-}
+export const ContinueResponseSchema = v.object({
+  access_token: v.string(),
+  // PickAccount checks this is 'Bearer', so its absence is worth catching.
+  token_type: v.string(),
+  // TokenManager already treats a missing refresh token as normal.
+  refresh_token: v.optional(v.string()),
+  expires_in: v.optional(v.number()),
+});
+export type ContinueResponse = v.InferOutput<typeof ContinueResponseSchema>;
 
-export interface LocalStorageRoomData {
-  uuid: string;
-  name: string;
-  short_name: string;
-  room_id: number;
-}
+export const LkRudnAuthResponseSchema = v.object({
+  data: v.object({
+    token: v.string(),
+    person: PersonSchema,
+  }),
+  error: v.unknown(),
+});
+export type LkRudnAuthResponse = v.InferOutput<typeof LkRudnAuthResponseSchema>;
+
+export const LkRudnMeResponseSchema = v.object({
+  data: v.object({
+    person: PersonSchema,
+  }),
+  error: v.unknown(),
+});
+export type LkRudnMeResponse = v.InferOutput<typeof LkRudnMeResponseSchema>;
+
+export const QrPassResponseSchema = v.object({
+  data: v.object({
+    // The only field this screen actually needs, and the most important single
+    // value in the app -- so it is the only one allowed to fail the pass.
+    pacs_num: v.string(),
+    /**
+     * The same pass as hex. Unused by this app: the official app hands it to
+     * the Sigur access SDK, which identifies over Bluetooth LE rather than NFC.
+     */
+    pacs_num_hex: v.optional(v.string()),
+    covid_info_show: v.optional(v.boolean()),
+  }),
+  error: v.unknown(),
+});
+export type QrPassResponse = v.InferOutput<typeof QrPassResponseSchema>;
+
+/** A room record as persisted in localStorage -- our shape, not the server's. */
+export const LocalStorageRoomSchema = v.object({
+  uuid: v.pipe(v.string(), v.minLength(1)),
+  name: v.string(),
+  short_name: v.string(),
+  room_id: v.pipe(v.number(), v.integer()),
+});
+export type LocalStorageRoomData = v.InferOutput<typeof LocalStorageRoomSchema>;

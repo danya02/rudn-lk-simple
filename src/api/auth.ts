@@ -14,6 +14,12 @@
 
 import { Hosts, OAUTH_CLIENT_ID, request } from './client';
 import type { ContinueResponse, GenericResponse, LkRudnAuthResponse, LoginResponse } from './types';
+import {
+  ContinueResponseSchema,
+  GenericResponseSchema,
+  LkRudnAuthResponseSchema,
+  LoginResponseSchema,
+} from './types';
 
 /**
  * Step 1. Exchange credentials for an ephemeral id token.
@@ -35,7 +41,7 @@ export function signIn(
    */
   authToken?: string | null,
 ): Promise<LoginResponse> {
-  return request<LoginResponse>(`${Hosts.Id}/auth/sign-in`, {
+  return request(`${Hosts.Id}/auth/sign-in`, LoginResponseSchema, {
     method: 'POST',
     ...(authToken === undefined ? {} : { token: authToken }),
     body: {
@@ -53,7 +59,7 @@ export function signIn(
  * treat it as an optimisation, never as the only way back in.
  */
 export function continueDirect(ephemeralToken: string): Promise<ContinueResponse> {
-  return request<ContinueResponse>(`${Hosts.Id}/auth/continue/direct`, {
+  return request(`${Hosts.Id}/auth/continue/direct`, ContinueResponseSchema, {
     method: 'POST',
     token: ephemeralToken,
   });
@@ -66,8 +72,9 @@ export function continueDirect(ephemeralToken: string): Promise<ContinueResponse
  */
 export function getOAuthCode(idToken: string): Promise<GenericResponse> {
   const redirect = encodeURIComponent(`${Hosts.MobApp}/token-rudn-id`);
-  return request<GenericResponse>(
+  return request(
     `${Hosts.Id}/oauth2/continue?client_id=${OAUTH_CLIENT_ID}&redirect_uri=${redirect}&response_type=code`,
+    GenericResponseSchema,
     { method: 'POST', token: idToken },
   );
 }
@@ -85,7 +92,7 @@ export function redeemOAuthCode(callbackUrl: string): Promise<LkRudnAuthResponse
     `${Hosts.MobApp}/token-rudn-id`,
     `${Hosts.MobApp}/v1/auth/token-rudn-id`,
   );
-  return request<LkRudnAuthResponse>(rewritten, {
+  return request(rewritten, LkRudnAuthResponseSchema, {
     method: 'GET',
     token: 'null',
     noContentType: true,
