@@ -1,11 +1,12 @@
 <template>
   <NeedsToken v-slot="{ token }" type="rect">
-    <QrPass :token="token" />
+    <QrPass :token="token">
+      <!-- Only where the brightness plugin exists; in the PWA it would do nothing. -->
+      <template #controls>
+        <q-toggle v-if="brightnessAvailable" v-model="maxBrightness" label="Full brightness" dense />
+      </template>
+    </QrPass>
   </NeedsToken>
-  <!-- Only where the brightness plugin exists; in the PWA the toggle would do nothing. -->
-  <div v-if="brightnessAvailable" class="row justify-center q-mt-md">
-    <q-toggle v-model="maxBrightness" label="Full brightness" dense />
-  </div>
 </template>
 
 

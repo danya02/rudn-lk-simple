@@ -16,6 +16,10 @@
 
       <q-btn style="width: 50%" color="primary" label="Refresh" @click="run_refresh(token)" :loading="loading"
         :disable="loading" />
+
+      <!-- Screen controls belong with the Refresh button rather than below the
+           page, where they pushed it past its own height and made it scroll. -->
+      <slot name="controls" />
     </q-page>
   </q-pull-to-refresh>
 </template>
