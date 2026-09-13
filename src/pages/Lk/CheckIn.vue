@@ -3,8 +3,9 @@
     <div v-if="rooms.length > 0" class="column items-center q-gutter-sm">
       <p>You have {{ rooms.length }} saved rooms.</p>
       <p>Swipe right for check-in. Swipe left to delete. Tap to open schedule and share the room.</p>
-      <q-btn color="primary" label="Scan more..." to="/util/qr-camera-grant" />
+      <q-btn color="primary" label="Scan more..." :to="{ name: 'qr-camera-grant' }" />
       <q-btn color="secondary" label="Attempt to check-in to all rooms" @click="bulk_checkin()" />
+      <q-btn color="primary" label="Back up saved rooms" :to="{ name: 'export-rooms' }" />
 
       <NeedsToken type="QToolbar" width="100%" v-slot="{ token }">
         <q-list bordered separator>
@@ -37,7 +38,12 @@
         You don't have any saved rooms yet.
         Add one or more to begin:
       </p>
-      <q-btn class="fullwidth" color="primary" label="Scan a room QR code..." to="/util/qr-camera-grant" />
+      <q-btn
+        class="fullwidth"
+        color="primary"
+        label="Scan a room or backup code..."
+        :to="{ name: 'qr-camera-grant' }"
+      />
 
     </div>
   </q-page>
@@ -51,7 +57,8 @@ import type { LocalStorageRoomData } from 'src/api/types';
 import NeedsToken from 'src/components/NeedsToken.vue';
 import { LkRudnRu } from 'src/consts/store-consts';
 import { useTokenStore } from 'src/stores/lk_rudn';
-import { notifyError, notifyWarning, notifySuccess } from 'src/utils/notify';
+import { buzzAccepted, buzzRefused } from 'src/utils/haptics';
+import { notifyError, notifyInfo, notifyWarning, notifySuccess } from 'src/utils/notify';
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -125,9 +132,14 @@ async function quickCheckin(entry: LocalStorageRoomData, token: string, reset: (
     };
 
     if (data.data.success) {
+      buzzAccepted();
       notifySuccess('Server responds: ' + data.data.message);
     } else {
-      notifyError('Server responds: ' + data.data.message);
+      buzzRefused();
+      // Not an error: checking in to every saved room asks about rooms that have
+      // no lesson right now, and the server declining is the expected answer for
+      // most of them. Only the request itself failing is a fault.
+      notifyInfo('Server responds: ' + data.data.message);
     }
   }
   catch (ex) {

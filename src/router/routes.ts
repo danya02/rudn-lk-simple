@@ -53,6 +53,11 @@ const routes: RouteRecordRaw[] = [
         path: 'room/:uuid',
         component: () => import('src/pages/Lk/RoomInfo.vue'),
       },
+      {
+        name: 'export-rooms',
+        path: 'export-rooms',
+        component: () => import('src/pages/Lk/ExportRooms.vue'),
+      },
     ],
   },
   {
