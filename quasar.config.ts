@@ -89,7 +89,9 @@ export default defineConfig((/* ctx */) => {
           {
             vueTsc: true,
             eslint: {
-              lintCommand: 'eslint -c ./eslint.config.js "./src*/**/*.{ts,js,mjs,cjs,vue}"',
+              // Absolute, because the Cordova build runs from src-cordova/ and
+              // a relative config path resolves to nothing there.
+              lintCommand: `eslint -c ${join(projectRoot, 'eslint.config.js')} "${projectRoot}/src*/**/*.{ts,js,mjs,cjs,vue}"`,
               useFlatConfig: true,
             },
           },
@@ -185,6 +187,20 @@ export default defineConfig((/* ctx */) => {
     // Full list of options: https://v2.quasar.dev/quasar-cli-vite/developing-cordova-apps/configuring-cordova
     cordova: {
       // noIosLegacyBuildFlag: true, // uncomment only if you know what you are doing
+
+      // Release builds produce an .aab, which is what Google Play accepts;
+      // debug builds stay an .apk, which is what `adb install` accepts.
+      // Quasar's default is an .apk for both, so both hooks below have to
+      // agree about which one is being produced.
+      getCordovaBuildParams: ({ target, debug }) =>
+        debug
+          ? ['build', '--debug', '--device', target]
+          : ['build', '--release', target, '--', '--packageType=bundle'],
+
+      getCordovaBuildOutputFolder: ({ debug }) =>
+        debug
+          ? 'platforms/android/app/build/outputs/apk/debug'
+          : 'platforms/android/app/build/outputs/bundle/release',
     },
 
     // Full list of options: https://v2.quasar.dev/quasar-cli-vite/developing-capacitor-apps/configuring-capacitor
