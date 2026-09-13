@@ -86,7 +86,10 @@ async function refresh() {
   saw_network_error = false;
 
   while (current_step_to_run >= 0 && current_step_to_run < steps.length) {
-    progress_bar_value.value = (steps.length - current_step_to_run) / steps.length;
+    // Full bar means "as close to a working session as the ladder gets", which is
+    // the last step. So the bar starts near full, drops as failures roll it back
+    // down the chain, and climbs again as each step is repaired.
+    progress_bar_value.value = (current_step_to_run + 1) / steps.length;
     const step = steps[current_step_to_run]!;
     progress_bar_text.value = step.label;
 
