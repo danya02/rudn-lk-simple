@@ -20,6 +20,9 @@
             <uses-permission android:name="android.permission.CAMERA" />
             <uses-permission android:name="android.permission.VIBRATE" />
         </config-file>
+        <edit-config file="AndroidManifest.xml" mode="merge" target="/manifest/application">
+            <application android:enableOnBackInvokedCallback="false" />
+        </edit-config>
         <icon density="ldpi" src="res/android/ldpi.png" />
         <icon density="mdpi" src="res/android/mdpi.png" />
         <icon density="hdpi" src="res/android/hdpi.png" />

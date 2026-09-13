@@ -1,1 +1,31 @@
 // app global css in SCSS form
+
+// Android 16 (targetSdk 36) makes edge-to-edge mandatory: the WebView draws
+// underneath the status and navigation bars, so without these the header
+// renders behind the clock. What makes env(safe-area-inset-*) resolve to a
+// non-zero value is `viewport-fit=cover`, which index.template.html sets only
+// for Cordova builds -- in a browser the insets are all 0, so these rules are
+// inert for the PWA and need no mode guard.
+
+.q-header {
+  padding-top: env(safe-area-inset-top);
+}
+
+.q-footer {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+// QPageSticky is positioned against the window rather than the page, so the
+// bottom-anchored ones (the hidden dev FAB, the TokenManager banner) would
+// otherwise land under the gesture-navigation pill.
+.q-page-sticky.fixed-bottom,
+.q-page-sticky.fixed-bottom-left,
+.q-page-sticky.fixed-bottom-right {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+// Notify renders into its own fixed container rather than into the layout, so
+// it needs the inset separately. All of this app's toasts are bottom-anchored.
+.q-notifications__list--bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
