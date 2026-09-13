@@ -11,6 +11,9 @@
     <allow-navigation href="about:*" />
     <icon src="./rudn-simple-app-logo.png" />
     <platform name="android">
+        <preference name="android-targetSdkVersion" value="36" />
+        <preference name="android-compileSdkVersion" value="36" />
+        <preference name="AndroidGradlePluginVersion" value="8.11.1" />
         <preference name="AndroidWindowSplashScreenAnimatedIcon" value="./rudn-simple-app-logo-expanded.png" />
         <preference name="SplashScreenBackgroundColor" value="#000000" />
         <config-file parent="/manifest" target="AndroidManifest.xml">
